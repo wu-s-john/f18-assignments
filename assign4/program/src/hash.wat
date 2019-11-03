@@ -4,20 +4,10 @@
 
   ;; Stack-based Adler32 hash implementation.
   (func $adler32 (param $address i32) (param $len i32) (result i32)
-    (local $a i32) (local $b i32) (local $i i32)
-
-    ;; YOUR CODE GOES HERE
-    (i32.const 0)
-    )
-  (export "adler32" (func $adler32))
-
-  (i32.const 65535)
-
-
-
-  ;; Tree-based Adler32 hash implementation.
-  (func $adler32v2 (param $address i32) (param $len i32) (result i32)
-    (local $a i32) (local $b i32) (local $i i32)
+    (local $a i32) (local $b i32) (local $i i32)(local $adler_constant i32)
+    
+    (i32.const 65535)
+    (set_local $adler_constant)
     (i32.const 1)
     (set_local $a)
     (i32.const 0)
@@ -33,50 +23,127 @@
         (get_local $i)
         (i32.eq)
         (br_if $incr_loop_break)
+        
         ;; compute the offset
+        ;; data[index]
         (get_local $i)
-        (i32.const 8)
-        (i32.mul)
-        
         (get_local $address)
-        (i32.shl)
-        (i32.const 255)
-        (i32.and)
+        (i32.add)
+        (i32.load8_u)
         
+        ;; (a + data[index])
         (get_local $a)
         (i32.add)
-        (set_local $a)
-        (i32.const 65535)
-        (get_local $a)
+        ;; (a + data[index]) % MOD_ADLER;
+        (get_local $adler_constant)
         (i32.rem_u)
+        ;; a = (a + data[index]) % MOD_ADLER
         (set_local $a)
         
-        (i32.const 65535)
         (get_local $a)
         (get_local $b)
         (i32.add)
+        (get_local $adler_constant)
         (i32.rem_u)
         (set_local $b)
 
+        (get_local $i)
+        (i32.const 1)
+        (i32.add)
+        (set_local $i)
 
-
-
-
-
-      
-
-
-
-
-
-
-      
+        (br $incr_loop)      
       )
     )
+      (get_local $b)
+      (i32.const 16)
+      (i32.shl)
+      (get_local $a)
+      (i32.or)
+
+    )
+  (export "adler32" (func $adler32))
 
 
-    ;; YOUR CODE GOES HERE
-    (get_local $a )
+
+  ;; Tree-based Adler32 hash implementation.
+  (func $adler32v2 (param $address i32) (param $len i32) (result i32)
+    (local $a i32) (local $b i32) (local $i i32) (local $adler_constant i32)
+    
+    
+    (set_local $adler_constant 
+      (i32.const 65535))
+    
+    (set_local $a 
+      (i32.const 1)
+    )
+    
+    (set_local $b
+      (i32.const 0)
+    )
+        
+    (set_local $i
+      (i32.const 0)
+    )
+
+    (block $incr_loop_break 
+    
+      (loop $incr_loop
+        ;; breaking the for loop
+        
+        (br_if $incr_loop_break
+          (i32.eq
+            (get_local $i)
+            (get_local $len)
+          )
+        )
+        
+        ;; compute the offset
+        ;; data[index]
+        
+        ;; a = (a + data[index])
+        (i32.rem_u
+          (i32.add
+            (i32.load8_u
+              (i32.add
+                (get_local $i)
+                (get_local $address)
+              )
+            )
+            (get_local $a)
+          )
+          (get_local $adler_constant)
+        )
+      
+        ;; a = (a + data[index]) % MOD_ADLER
+        (set_local $a)
+        
+        (set_local $b
+        (i32.rem_u
+          (i32.add
+            (get_local $a)
+            (get_local $b)
+          )
+          (get_local $adler_constant)
+        )
+        )
+
+        (set_local $i
+          (i32.add
+            (get_local $i)
+            (i32.const 1)
+          )
+        )
+
+        (br $incr_loop)      
+      )
+    )
+      (get_local $b)
+      (i32.const 16)
+      (i32.shl)
+      (get_local $a)
+      (i32.or)
+
     )
 
   (export "adler32v2" (func $adler32v2))

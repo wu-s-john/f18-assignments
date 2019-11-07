@@ -170,18 +170,39 @@
   )
 
   (func $propose_block 
-    (param $curr_length_location i32) (param $curr_length i32) (param $new_block_length i32) (result i32) (local $free_location i32) 
+    (param $curr_length_location i32) (param $new_block_length i32) (result i32) 
+    (local $free_location i32) 
+    (local $curr_length i32)
+    (local $payload_location i32)
     (local $new_block_length_location i32) 
     (local $new_block_length_with_offset i32)
+    
+    (set_local 
+      $curr_length
+      (i32.load (get_local $curr_length_location))
+    )
+    
+    (set_local 
+      $free_location
+      (i32.add
+          (i32.const 4)
+          (get_local $curr_length_location)
+      )
+    )
+
+    (set_local 
+      $payload_location
+      (i32.add
+          (i32.const 4)
+          (get_local $free_location)
+      )
+    )
 
     (
         ;; No matter what, you will set the location of the current block's free flag to zero
         i32.store
+        (get_local $free_location)
         (i32.const 0)
-          (i32.add
-            (i32.const 4)
-            (get_local $curr_length_location)
-          )
     )
     (set_local $new_block_length_with_offset
       (i32.add
@@ -191,150 +212,120 @@
     )
     
     (block $condtional_statement_break
-      (block $goto_true_statement
-        (i32.ge_s
-          (get_local $new_block_length_with_offset)
-          (get_local $curr_length)
-        )
-        (br_if $condtional_statement_break)
-        ;; Update the current block's length as the new block length
-        (i32.store
+      
+      (i32.ge_s
+        (get_local $new_block_length_with_offset)
+        (get_local $curr_length)
+      )
+      (br_if $condtional_statement_break) ;; If this is true, then you cannot create the block at this space
+      ;; Update the current block's length as the new block length
+      (i32.store
+        (get_local $curr_length_location)
+        (get_local $new_block_length)
+      )
+      ;; Create the new block at the free location
+      (set_local
+        $new_block_length_location
+        (i32.add
+          (get_local $payload_location)
           (get_local $new_block_length)
-          (get_local $curr_length_location)
         )
-        ;; Create the new block
-        (set_local
-          $new_block_length_location
+      )
+
+      ;; Store the new length
+      (i32.store
+        (get_local $new_block_length_location)
+        (i32.sub
+          ;; Check this
+          (get_local $curr_length)
           (i32.add
-            (i32.add
-              (get_local $curr_length_location)
-              (get_local $curr_length)
-            )
+            (get_local $new_block_length)
             (i32.const 8)
           )
         )
+      )
 
-        ;; Store the new length
-        (i32.store
-          (i32.sub
-            (get_local $new_block_length_with_offset)
-            (get_local $curr_length_location)
-          )
+      ;; store the new flag
+      (i32.store
+        (i32.add
+          (i32.const 4)
           (get_local $new_block_length_location)
         )
-
-        ;; store the new flag
-        (i32.store
-          (i32.gt_s 
-            (get_local $new_block_length_with_offset)
-            (get_local $curr_length) 
-            )
-          (i32.add
-            (i32.const 4)
-            (get_local $new_block_length_location)
-          )
+        (i32.gt_s 
+          (get_local $curr_length) 
+          (get_local $new_block_length_with_offset)
         )
       )
+      (br $condtional_statement_break)
       
       ;; This is the true statement
     )
 
-    (i32.add
-      (i32.const 8)
-      (get_local $curr_length_location)
-    )
-    
-      
+    (get_local $payload_location)  
   )
 
   (func $alloc (param $len i32) (result i32) 
-    (local $addr i32) (local $curr_len i32) (local $curr_flag_loc i32)
+    (local $addr i32) (local $curr_length i32) (local $curr_flag_loc i32)
+    (set_local $addr
+      (i32.const 0)
+    )
 
     (block $alloc_loop_break
       (block $death_loop
         (loop $alloc_loop
           (br_if $death_loop
-            (get_global $PAGE_SIZE)
-            (get_local $addr)
-            (i32.eq)
+            (i32.ge_s
+              (get_local $addr)
+              (get_global $PAGE_SIZE)
+            )
           )
           ;; Get block length
-          (set_local $curr_len
-            (i32.load 
-              (get_local $addr)
-            )
+          (set_local $curr_length
+            (i32.load  (get_local $addr))
           )
-
-          
           
           (set_local $curr_flag_loc
-            (i32.add
-              (get_local $addr)
-              (i32.const 4)
-            )
+            (i32.add (get_local $addr) (i32.const 4))
           )
 
           (block $false_statement
             (block $true_statement
                 (i32.and 
-                  (i32.eq
-                    (i32.load 
-                      ;; Get block flag
-                      (get_local  $curr_flag_loc)
-                    )
-                    (i32.const 1)
-                  )
+                  (i32.load (get_local  $curr_flag_loc))
                   (i32.gt_s
-                      ;; There is an
-                      (i32.add
-                        (get_local $len)
-                        (i32.const 8)
-                      )
-                    (get_local $curr_len)
+                    (get_local $curr_length)
+                    (get_local $len)
                   )
                 )
                 ;; You enter the third staement
                 (br_if $true_statement)
-
+                ;; This is the false statement
                 (set_local $addr
                   (i32.add 
                     (i32.add
                       (get_local $addr)
                       (i32.const 8)
                     )
-                    (get_local $curr_len)
+                    (get_local $curr_length)
                   )
                 )
-
                 ;; fill in false statement here
                 (br $false_statement)
             )
-            (i32.store 
-              (i32.const 0)
-              (get_local $curr_flag_loc)
-
+            (set_local $addr
+              (call $propose_block
+                (get_local $addr)
+                (get_local $len)
+              )
             )
           )
-
-
-
-          ;; TODO: You need to jump to the next memory (block length + 2 * 4 bytes)
-          (set_local $addr
-            (i32.add
-              (get_local $addr)
-              (i32.const 1)
-            )
-          )
-          (br $alloc_loop)
+          (br $alloc_loop_break)
         )
       )
       (unreachable)
     )
-
-
-    ;; YOUR CODE GOES HERE
-    (unreachable)
-    )
+    (get_local $addr)
+  )
   (export "alloc" (func $alloc))
 
   )
